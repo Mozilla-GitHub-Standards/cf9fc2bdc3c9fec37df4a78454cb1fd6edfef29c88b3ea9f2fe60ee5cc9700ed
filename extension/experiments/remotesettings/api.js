@@ -8,23 +8,32 @@ XPCOMUtils.defineLazyModuleGetters(this, {
 const { EventManager } = ExtensionCommon;
 const { ExtensionError } = ExtensionUtils;
 
+const SERVER_LOCAL = "http://localhost:8888/v1";
+const SERVER_DEV = "https://kinto.dev.mozaws.net/v1";
 const SERVER_PROD = "https://firefox.settings.services.mozilla.com/v1";
 const SERVER_STAGE = "https://settings.stage.mozaws.net/v1";
 const HASH_PROD =
   "97:E8:BA:9C:F1:2F:B3:DE:53:CC:42:A4:E6:57:7E:D6:4D:F4:93:C2:47:B4:14:FE:A0:36:81:8D:38:23:56:0E";
 const HASH_STAGE =
   "DB:74:CE:58:E4:F9:D0:9E:E0:42:36:BE:6C:C5:C4:F6:6A:E7:74:7D:C0:21:42:7A:03:BC:2F:57:0C:8B:9B:90";
+const HASH_LOCAL =
+  "5E:36:F2:14:DE:82:3F:8B:29:96:89:23:5F:03:41:AC:AF:A0:75:AF:82:CB:4C:D4:30:7C:3D:B3:43:39:2A:FE";
 
 async function getState() {
   const inspected = await RemoteSettings.inspect();
 
   const { serverURL, mainBucket } = inspected;
   let environment = "custom";
-  if (serverURL == SERVER_PROD) {
+  if (serverURL == SERVER_DEV) {
+    environment = "dev";
+  } else if (serverURL == SERVER_PROD) {
     environment = "prod";
   } else if (serverURL == SERVER_STAGE) {
     environment = "stage";
+  } else if (serverURL == SERVER_LOCAL) {
+    environment = "local";
   }
+
   if (mainBucket.includes("-preview")) {
     environment += "-preview";
   }
@@ -93,6 +102,7 @@ var remotesettings = class extends ExtensionAPI {
                 HASH_PROD,
               );
               Services.prefs.clearUserPref("services.settings.load_dump");
+              Services.prefs.clearUserPref("services.settings.verify_signature");
             } else if (env.includes("stage")) {
               Services.prefs.setCharPref(
                 "services.settings.server",
@@ -104,6 +114,25 @@ var remotesettings = class extends ExtensionAPI {
               );
               // We don't want to load dumps for stage since the datasets don't always overlap.
               Services.prefs.setBoolPref("services.settings.load_dump", false);
+              Services.prefs.clearUserPref("services.settings.verify_signature");
+            } else if (env.includes("dev")) {
+              Services.prefs.setCharPref(
+                "services.settings.server",
+                SERVER_DEV,
+              );
+              Services.prefs.setBoolPref("services.settings.load_dump", false);
+              Services.prefs.setBoolPref("services.settings.verify_signature", false);
+            } else if (env.includes("local")) {
+              Services.prefs.setCharPref(
+                "services.settings.server",
+                SERVER_LOCAL,
+              );
+              Services.prefs.setCharPref(
+                "security.content.signature.root_hash",
+                HASH_LOCAL,
+              );
+              Services.prefs.setBoolPref("services.settings.load_dump", false);
+              Services.prefs.clearUserPref("services.settings.verify_signature");
             }
 
             if (env.includes("-preview")) {
